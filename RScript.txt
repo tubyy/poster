@@ -1,0 +1,114 @@
+install.packages("ggplot2")
+install.packages("readxl")
+library(ggplot2)
+library(readxl)
+require(tidyverse)
+library(scales)
+library(sp) # Konumsal (Spatial) veri için
+tur<- readRDS("turkey.rds") #reading a spatial data
+
+tur_for <- fortify(tur) 
+
+okumayazma=read_excel("VeriSeti.xls", sheet = "Sayfa1")
+
+id_and_cities<- data_frame(id = rownames(tur@data), sehir = tur@data$NAME_1) %>% left_join(okumayazma, by = "sehir")
+
+grouped_data <- id_and_cities %>%
+  group_by(sehir) %>%
+  summarise(total_value = sum(Bilen),
+            ortalama = as.integer(sum(Bilen) / 5)
+            )
+
+grouped_data <- grouped_data %>%
+  mutate(id=as.character(1:nrow(grouped_data)))
+
+final_map <- left_join(tur_for, grouped_data, by = "id")
+
+ggplot(final_map) +geom_polygon( aes(x = long, y = lat, group = group, fill = ortalama), color = "grey") +
+  coord_map() +theme_void() + labs(title = "Türkiye'nin illere göre Okuma Yazma Oranı (Son 5 Yıl)",caption = "Kaynak: Türkiye Istatistik Kurumu") +
+  scale_fill_distiller(labels = label_number(big.mark = ","),name = "Okuma Yazma Bilenler",palette = "Spectral", limits = c(10000,10000000), na.value = "white") +
+  theme(legend.key.size = unit(3, "lines"),legend.position = "bottom",plot.title = element_text(hjust = 0.5),plot.subtitle = element_text(hjust = 0.5))
+
+
+
+install.packages("openxlsx")
+library(openxlsx)
+# Yeni bir Excel dosyası oluşturma
+wb <- createWorkbook()
+
+# Veri setlerini farklı sayfalara yazma
+addWorksheet(wb, "Sheet1")
+writeData(wb, "Sheet1", grouped_data)
+
+# Excel dosyasını kaydetme
+saveWorkbook(wb, "veri_setleri.xlsx", overwrite = TRUE)
+
+
+
+
+
+# 2. kadın erkek 5 yıl ortalama
+okumayazma=read_excel("VeriSeti.xls", sheet = "Sayfa1")
+
+# grouped_data <- okumayazma %>%
+#   group_by(sehir) %>%
+#   #filter(Cinsiyet == "Erkek") %>%
+#   summarise(total_value = sum(Bilen),
+# ortalama = as.integer(sum(Bilen) / 5)
+#   )
+
+# grouped_data <- okumayazma %>%
+#   group_by(sehir) %>%
+#   filter(Cinsiyet == "Erkek") %>%
+#   summarise(total_value = sum(Bilen),
+# erkek_ortalama = as.integer(sum(Bilen) / 5)
+#   )
+
+# Her kategori için toplam değerleri hesaplama
+total_values <- okumayazma %>%
+  group_by(Cinsiyet,Yil) %>%
+  summarise(total_value = as.integer(sum(Bilen) / 5))
+
+
+
+ggplot(total_values,aes(x=Yil,y=Cinsiyet))+geom_histogram()
+
+
+# "A" kategorisindeki değerleri toplama
+total_A <- okumayazma %>%
+  group_by(Yil) %>%
+  filter(Cinsiyet == "Erkek") %>%
+  summarise(total_value_A = sum(Bilen)) %>%
+  pull(total_value_A)
+
+# Yeni bir sütuna atama
+total_values$total_value_A <- total_A
+
+
+
+
+# Orijinal veri setine bu toplamları ekleme
+# grouped_data <- grouped_data %>%
+#   left_join(total_values, by = "sehir") %>%
+#   mutate(total_value_A = case_when(Cinsiyet == "Erkek" ~ total_values),
+# total_value_B = case_when(Cinsiyet == "Kadın" ~ total_values))
+
+
+# 3. Yıllara göre toplam
+okumayazma=read_excel("5Okuma_Yazma_TUM.xls", sheet = "Sayfa1")
+total_values <- okumayazma %>%
+  group_by(Yil) %>%
+  summarise(total_value = as.integer(sum(Bilen)))
+
+
+ggplot(total_values, aes(x=Yil, y=total_value))+
+  geom_line(color="deepskyblue4", size=0.4)+
+  theme_classic()+
+  geom_area(fill="deepskyblue")+
+  labs(x="Yıl", y="Ortalama")
+
+ggplot(total_values, aes(Yil, total_value, group = 1)) +
+  geom_point() +
+  geom_line(color="deepskyblue4") +theme_classic()+
+  labs(x = "Yıl", y = "Toplam", 
+       title = "Son 5 Yıl Okuma Yazma Bilenlerin Sayısı ")
